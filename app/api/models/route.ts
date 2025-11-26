@@ -6,16 +6,22 @@ const MODELS_DIR = process.env.MODELS_DIR || '/app/models'
 
 export async function GET() {
   try {
+    console.log(`Listing models from MODELS_DIR: ${MODELS_DIR}`)
+    console.log(`MODELS_DIR env var: ${process.env.MODELS_DIR}`)
+    
     // Check if models directory exists
     try {
       await fs.access(MODELS_DIR)
-    } catch {
+      console.log(`Directory ${MODELS_DIR} exists`)
+    } catch (error: any) {
       // Directory doesn't exist, return empty array
+      console.error(`Directory ${MODELS_DIR} does not exist:`, error.message)
       return NextResponse.json([])
     }
 
     // Read directory contents
     const files = await fs.readdir(MODELS_DIR)
+    console.log(`Found ${files.length} items in directory: ${files.join(', ')}`)
 
     // Get file stats for each file
     const models = await Promise.all(
