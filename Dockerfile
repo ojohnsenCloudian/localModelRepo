@@ -31,8 +31,8 @@ ENV PORT=8900
 ENV HOST=0.0.0.0
 ENV MODELS_DIR=/app/models
 
-# Create models directory
-RUN mkdir -p /app/models
+# Create models directory with proper permissions
+RUN mkdir -p /app/models && chmod 777 /app/models
 
 # Start the application
 CMD ["npm", "start"]

@@ -8,12 +8,20 @@ const execAsync = promisify(exec)
 
 const MODELS_DIR = process.env.MODELS_DIR || '/app/models'
 
-// Ensure models directory exists
+// Ensure models directory exists with proper permissions
 async function ensureModelsDir() {
   try {
     await fs.mkdir(MODELS_DIR, { recursive: true })
-  } catch (error) {
-    console.error('Error creating models directory:', error)
+    // Try to set permissions (may fail if not root, but that's ok)
+    try {
+      await fs.chmod(MODELS_DIR, 0o777)
+    } catch (permError) {
+      // Ignore permission errors - directory might already have correct permissions
+      console.log('Note: Could not set directory permissions (may already be correct)')
+    }
+  } catch (error: any) {
+    console.error('Error creating models directory:', error.message)
+    throw error
   }
 }
 
@@ -68,8 +76,26 @@ export async function POST(request: NextRequest) {
     console.log(`Extracted filename: ${filename}`)
     console.log(`Target file path: ${filePath}`)
 
-    // Ensure we're using absolute path and directory exists
-    await fs.mkdir(MODELS_DIR, { recursive: true })
+    // Ensure we're using absolute path and directory exists with write permissions
+    await ensureModelsDir()
+    
+    // Verify we can write to the directory by creating a test file
+    try {
+      const testWritePath = path.join(MODELS_DIR, `.write-test-${Date.now()}`)
+      await fs.writeFile(testWritePath, 'test')
+      await fs.unlink(testWritePath)
+      console.log(`✓ Write test passed for ${MODELS_DIR}`)
+    } catch (writeError: any) {
+      console.error(`✗ Write test failed for ${MODELS_DIR}:`, writeError.message)
+      return NextResponse.json(
+        {
+          error: 'Cannot write to models directory',
+          details: writeError.message,
+          MODELS_DIR: MODELS_DIR,
+        },
+        { status: 500 }
+      )
+    }
     
     // Use wget to download the file
     // -O specifies output file (use absolute path)
@@ -103,8 +129,16 @@ export async function POST(request: NextRequest) {
       console.log(`wget stderr: ${stderr}`)
     }
 
-    // Wait for file system to sync
+    // Wait for file system to sync and verify file is on disk
     await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    // Force sync to ensure data is written to disk
+    try {
+      const { stdout: syncResult } = await execAsync('sync')
+      console.log('File system synced')
+    } catch (syncError) {
+      console.log('Note: sync command not available or failed (this is ok)')
+    }
 
     // Check if file was downloaded successfully
     const absolutePath = path.resolve(MODELS_DIR, filename)
@@ -120,11 +154,23 @@ export async function POST(request: NextRequest) {
         const dirContents = await fs.readdir(MODELS_DIR)
         console.log(`Directory now contains: ${dirContents.join(', ')}`)
         
+        // Double-check: Try to read a small portion of the file to ensure it's actually on disk
+        try {
+          const fd = await fs.open(absolutePath, 'r')
+          const buffer = Buffer.alloc(1024)
+          await fd.read(buffer, 0, 1024, 0)
+          await fd.close()
+          console.log(`✓ File verified readable, first 100 bytes: ${buffer.toString('utf-8', 0, 100)}`)
+        } catch (readError: any) {
+          console.error(`⚠ Warning: File exists but may not be readable: ${readError.message}`)
+        }
+        
         return NextResponse.json({
           success: true,
           filename,
           size: stats.size,
           filePath: absolutePath,
+          MODELS_DIR: MODELS_DIR,
           message: 'Download completed successfully',
         })
       } else {

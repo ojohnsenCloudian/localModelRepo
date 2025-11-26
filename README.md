@@ -23,11 +23,19 @@ A Next.js application that allows you to download Hugging Face models via URL an
    cd localModelRepo
    ```
 
-2. Create the models directory on your Raspberry Pi:
+2. Create the models directory on your Raspberry Pi with proper permissions:
    ```bash
    sudo mkdir -p /localModelRepo/data/models
+   sudo chown -R 1000:1000 /localModelRepo/data/models
+   sudo chmod -R 755 /localModelRepo/data/models
+   ```
+   
+   **Important**: If you still have permission issues, you can use:
+   ```bash
    sudo chmod -R 777 /localModelRepo/data/models
    ```
+   
+   Or remove the `user: "0:0"` line from docker-compose.yml and ensure the directory is writable by the node user (UID 1000).
 
 3. Build and start the Docker container:
    ```bash
