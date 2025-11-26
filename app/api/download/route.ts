@@ -53,7 +53,8 @@ async function downloadChunk(
   controller: ReadableStreamDefaultController,
   filename: string,
   chunkNumber: number,
-  totalChunks: number
+  totalChunks: number,
+  totalSize: number
 ): Promise<void> {
   let attempt = 0
   
@@ -140,7 +141,8 @@ async function downloadChunk(
         })
       }
 
-      // Stream chunk to disk
+      // Stream chunk to disk with progress updates
+      let lastProgressUpdate = 0
       while (true) {
         const { done, value } = await reader.read()
         
@@ -150,6 +152,25 @@ async function downloadChunk(
 
         await writeChunk(value)
         chunkBytesDownloaded += value.length
+
+        // Send progress update every 10MB within the chunk
+        if (chunkBytesDownloaded - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
+          const totalDownloaded = startByte + chunkBytesDownloaded
+          const progress = totalSize > 0 
+            ? Math.round((totalDownloaded / totalSize) * 100) 
+            : 0
+
+          sendSSE(controller, {
+            status: 'downloading',
+            filename,
+            message: `Chunk ${chunkNumber}/${totalChunks}: ${Math.round(chunkBytesDownloaded / 1024 / 1024)}MB / ${Math.round((endByte - startByte + 1) / 1024 / 1024)}MB`,
+            progress,
+            loaded: totalDownloaded,
+            total: totalSize,
+          })
+          
+          lastProgressUpdate = chunkBytesDownloaded
+        }
       }
 
       // Close write stream
@@ -228,7 +249,8 @@ async function downloadFileInChunks(
       controller,
       filename,
       chunkNumber + 1,
-      totalChunks
+      totalChunks,
+      totalSize
     )
 
     downloadedBytes += chunkSize
@@ -371,7 +393,8 @@ export async function POST(request: NextRequest) {
             controller,
             filename,
             chunkNumber + 1,
-            totalChunks
+            totalChunks,
+            totalSize
           )
 
           downloadedBytes += chunkSize
