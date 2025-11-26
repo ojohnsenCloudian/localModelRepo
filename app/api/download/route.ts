@@ -120,34 +120,71 @@ export async function POST(request: NextRequest) {
         let lastProgressUpdate = 0
         const progressUpdateInterval = 1024 * 1024 // Update every 1MB
 
-        // Stream the file to disk with progress tracking
-        while (true) {
-          const { done, value } = await reader.read()
-          
-          if (done) {
-            writeStream.end()
-            break
-          }
-
-          writeStream.write(value)
-          downloadedBytes += value.length
-
-          // Send progress update every 1MB or on completion
-          if (downloadedBytes - lastProgressUpdate >= progressUpdateInterval || done) {
-            const progress = totalSize > 0 
-              ? Math.round((downloadedBytes / totalSize) * 100) 
-              : 0
-
-            sendSSE(controller, {
-              status: 'downloading',
-              filename,
-              progress,
-              loaded: downloadedBytes,
-              total: totalSize
-            })
+        // Helper function to write chunk with backpressure handling
+        const writeChunk = (chunk: Uint8Array): Promise<void> => {
+          return new Promise((resolve, reject) => {
+            // Set up error handler first
+            const errorHandler = (error: Error) => {
+              writeStream.removeListener('drain', drainHandler)
+              reject(error)
+            }
+            writeStream.once('error', errorHandler)
             
-            lastProgressUpdate = downloadedBytes
+            // Write the chunk
+            const canContinue = writeStream.write(chunk)
+            
+            if (canContinue) {
+              // Buffer has space, resolve immediately
+              writeStream.removeListener('error', errorHandler)
+              resolve()
+            } else {
+              // Buffer is full, wait for drain event
+              const drainHandler = () => {
+                writeStream.removeListener('error', errorHandler)
+                resolve()
+              }
+              writeStream.once('drain', drainHandler)
+            }
+          })
+        }
+
+        // Stream the file to disk with progress tracking and backpressure handling
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            
+            if (done) {
+              break
+            }
+
+            // Write chunk and wait for backpressure if needed
+            await writeChunk(value)
+            downloadedBytes += value.length
+
+            // Send progress update every 1MB
+            if (downloadedBytes - lastProgressUpdate >= progressUpdateInterval) {
+              const progress = totalSize > 0 
+                ? Math.round((downloadedBytes / totalSize) * 100) 
+                : 0
+
+              sendSSE(controller, {
+                status: 'downloading',
+                filename,
+                progress,
+                loaded: downloadedBytes,
+                total: totalSize
+              })
+              
+              lastProgressUpdate = downloadedBytes
+            }
           }
+
+          // End the write stream
+          writeStream.end()
+        } catch (streamError: any) {
+          // Clean up on error
+          writeStream.destroy()
+          throw streamError
         }
 
         // Wait for write stream to finish

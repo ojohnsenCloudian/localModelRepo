@@ -10,5 +10,8 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=2048
     platform: linux/arm64
+    mem_limit: 6g
+    mem_reservation: 4g
 
