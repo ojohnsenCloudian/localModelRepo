@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs/promises'
 import path from 'path'
+import { getModelTags } from './metadata'
 
 // Use absolute path to match Docker volume mount
 const MODELS_DIR = '/app/models'
@@ -21,16 +22,25 @@ export async function GET() {
     const files = await fs.readdir(MODELS_DIR)
     console.log(`Found ${files.length} files in models directory:`, files)
     
+    // Filter out metadata file and hidden files
+    const modelFiles = files.filter(filename => 
+      filename !== '.metadata.json' && 
+      !filename.startsWith('.') &&
+      filename !== 'models' // Exclude the nested models directory if it exists
+    )
+    
     const models = await Promise.all(
-      files.map(async (filename) => {
+      modelFiles.map(async (filename) => {
         const filePath = path.join(MODELS_DIR, filename)
         try {
           const stats = await fs.stat(filePath)
           if (stats.isFile()) {
+            const tags = await getModelTags(filename)
             return {
               filename,
               size: stats.size,
               downloadedAt: stats.mtime.toISOString(),
+              tags,
             }
           }
           return null

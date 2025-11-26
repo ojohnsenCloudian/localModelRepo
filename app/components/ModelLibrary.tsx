@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import { Search, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import ModelDialog from './ModelDialog'
 
 interface Model {
   filename: string
   size: number
   downloadedAt: string
+  tags?: string[]
 }
 
 interface ModelLibraryProps {
@@ -35,9 +37,11 @@ export default function ModelLibrary({ serverUrl }: ModelLibraryProps) {
     } else {
       const query = searchQuery.toLowerCase()
       setFilteredModels(
-        models.filter((model) =>
-          model.filename.toLowerCase().includes(query)
-        )
+        models.filter((model) => {
+          const matchesFilename = model.filename.toLowerCase().includes(query)
+          const matchesTags = model.tags?.some(tag => tag.toLowerCase().includes(query)) || false
+          return matchesFilename || matchesTags
+        })
       )
     }
   }, [searchQuery, models])
@@ -54,6 +58,10 @@ export default function ModelLibrary({ serverUrl }: ModelLibraryProps) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleTagsUpdated = () => {
+    fetchModels()
   }
 
   const formatSize = (bytes: number) => {
@@ -79,7 +87,7 @@ export default function ModelLibrary({ serverUrl }: ModelLibraryProps) {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search models..."
+            placeholder="Search models by name or tag..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -106,9 +114,20 @@ export default function ModelLibrary({ serverUrl }: ModelLibraryProps) {
                 <CardTitle className="truncate text-base">{model.filename}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>Size: {formatSize(model.size)}</p>
-                  <p>Downloaded: {new Date(model.downloadedAt).toLocaleDateString()}</p>
+                <div className="space-y-3">
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p>Size: {formatSize(model.size)}</p>
+                    <p>Downloaded: {new Date(model.downloadedAt).toLocaleDateString()}</p>
+                  </div>
+                  {model.tags && model.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-2">
+                      {model.tags.map((tag) => (
+                        <Badge key={tag} variant="secondary" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -121,6 +140,7 @@ export default function ModelLibrary({ serverUrl }: ModelLibraryProps) {
           model={selectedModel}
           onClose={() => setSelectedModel(null)}
           serverUrl={serverUrl}
+          onTagsUpdated={handleTagsUpdated}
         />
       )}
     </div>
