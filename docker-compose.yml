@@ -16,4 +16,3 @@ services:
     restart: unless-stopped
     platform: linux/arm64
     user: "0:0"
-

@@ -21,7 +21,6 @@ export default function Home() {
   const [showDownloadForm, setShowDownloadForm] = useState(false)
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
 
-  // Get host URL for wget commands
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const protocol = window.location.protocol
@@ -31,7 +30,6 @@ export default function Home() {
     }
   }, [])
 
-  // Load models
   const loadModels = async () => {
     try {
       setIsLoadingModels(true)
@@ -39,8 +37,6 @@ export default function Home() {
       if (response.ok) {
         const data = await response.json()
         setModels(data)
-      } else {
-        console.error('Failed to load models')
       }
     } catch (error) {
       console.error('Error loading models:', error)
@@ -51,25 +47,18 @@ export default function Home() {
 
   useEffect(() => {
     loadModels()
-    // Auto-refresh every 30 seconds
     const interval = setInterval(loadModels, 30000)
     return () => clearInterval(interval)
   }, [])
 
-  // Filter models based on search query
   const filteredModels = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return models
-    }
+    if (!searchQuery.trim()) return models
     const query = searchQuery.toLowerCase()
-    return models.filter(model => 
-      model.filename.toLowerCase().includes(query)
-    )
+    return models.filter(model => model.filename.toLowerCase().includes(query))
   }, [models, searchQuery])
 
   const handleDownload = async (e: React.FormEvent) => {
     e.preventDefault()
-    
     if (!url.trim()) {
       setDownloadMessage({ type: 'error', text: 'Please enter a URL' })
       return
@@ -81,22 +70,19 @@ export default function Home() {
     try {
       const response = await fetch('/api/download', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url.trim() }),
       })
 
       const data = await response.json()
 
-      if (response.ok && data.success) {
+      if (response.ok) {
         setDownloadMessage({
           type: 'success',
           text: `Successfully downloaded: ${data.filename} (${formatBytes(data.size)})`,
         })
         setUrl('')
         setShowDownloadForm(false)
-        // Reload models list
         await loadModels()
       } else {
         setDownloadMessage({
@@ -144,14 +130,9 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-gray-900 mb-3">
-            Model Library
-          </h1>
-          <p className="text-lg text-gray-600 mb-4">
-            Your local Hugging Face model repository
-          </p>
+          <h1 className="text-5xl font-bold text-gray-900 mb-3">Model Library</h1>
+          <p className="text-lg text-gray-600 mb-4">Your local Hugging Face model repository</p>
           <div className="flex justify-center gap-4 text-sm text-gray-500">
             <span>{models.length} {models.length === 1 ? 'model' : 'models'}</span>
             <span>•</span>
@@ -159,7 +140,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Search and Actions Bar */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4 items-center">
             <div className="flex-1 w-full">
@@ -196,7 +176,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Download Form */}
           {showDownloadForm && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <form onSubmit={handleDownload} className="space-y-4">
@@ -238,7 +217,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Models Library Grid */}
         <div className="bg-white rounded-xl shadow-lg p-6">
           <h2 className="text-2xl font-semibold text-gray-800 mb-6">
             {searchQuery ? `Search Results (${filteredModels.length})` : 'All Models'}
@@ -314,4 +292,3 @@ export default function Home() {
     </main>
   )
 }
-

@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       try {
         await fs.writeFile(path.join(MODELS_DIR, '.sync'), '')
         await fs.unlink(path.join(MODELS_DIR, '.sync'))
-      } catch (syncError) {
+      } catch (syncError: any) {
         // Ignore sync errors
       }
       
