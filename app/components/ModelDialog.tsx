@@ -154,19 +154,21 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
           }
           
           // Try one more time with the selected text
-          const selectedText = selection.toString()
-          if (selectedText) {
-            try {
-              await navigator.clipboard.writeText(selectedText)
-              setCopied(true)
-              toast({
-                title: "Copied!",
-                description: "Wget command copied to clipboard",
-              })
-              setTimeout(() => setCopied(false), 2000)
-              return
-            } catch {
-              // Continue to manual copy message
+          if (selection) {
+            const selectedText = selection.toString()
+            if (selectedText) {
+              try {
+                await navigator.clipboard.writeText(selectedText)
+                setCopied(true)
+                toast({
+                  title: "Copied!",
+                  description: "Wget command copied to clipboard",
+                })
+                setTimeout(() => setCopied(false), 2000)
+                return
+              } catch {
+                // Continue to manual copy message
+              }
             }
           }
           
