@@ -63,30 +63,66 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
   }, [model, serverUrl])
 
   const copyToClipboard = async () => {
+    const textToCopy = wgetCommand || ''
+    
+    if (!textToCopy) {
+      toast({
+        title: "Nothing to copy",
+        description: "Wget command is not available",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
-      // Try modern clipboard API first (works in secure contexts)
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(wgetCommand)
-        setCopied(true)
-        toast({
-          title: "Copied!",
-          description: "Wget command copied to clipboard",
-        })
-        setTimeout(() => setCopied(false), 2000)
-        return
+      // Method 1: Try modern clipboard API (works in secure contexts like HTTPS)
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(textToCopy)
+          setCopied(true)
+          toast({
+            title: "Copied!",
+            description: "Wget command copied to clipboard",
+          })
+          setTimeout(() => setCopied(false), 2000)
+          return
+        } catch (clipboardError) {
+          console.log('Clipboard API failed, trying fallback:', clipboardError)
+          // Fall through to fallback method
+        }
       }
       
-      // Fallback for non-secure contexts or older browsers
+      // Method 2: Fallback using execCommand (works in HTTP and older browsers)
       const textArea = document.createElement('textarea')
-      textArea.value = wgetCommand
+      textArea.value = textToCopy
       textArea.style.position = 'fixed'
-      textArea.style.left = '-999999px'
-      textArea.style.top = '-999999px'
+      textArea.style.left = '0'
+      textArea.style.top = '0'
+      textArea.style.width = '2em'
+      textArea.style.height = '2em'
+      textArea.style.padding = '0'
+      textArea.style.border = 'none'
+      textArea.style.outline = 'none'
+      textArea.style.boxShadow = 'none'
+      textArea.style.background = 'transparent'
       textArea.style.opacity = '0'
+      textArea.style.zIndex = '-1'
+      
       document.body.appendChild(textArea)
       textArea.focus()
       textArea.select()
-      textArea.setSelectionRange(0, wgetCommand.length)
+      
+      // For iOS
+      if (navigator.userAgent.match(/ipad|iphone/i)) {
+        const range = document.createRange()
+        range.selectNodeContents(textArea)
+        const selection = window.getSelection()
+        if (selection) {
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+        textArea.setSelectionRange(0, 999999)
+      }
       
       const successful = document.execCommand('copy')
       document.body.removeChild(textArea)
@@ -99,28 +135,53 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
         })
         setTimeout(() => setCopied(false), 2000)
       } else {
-        throw new Error('execCommand failed')
+        throw new Error('execCommand returned false')
       }
     } catch (error) {
-      console.error('Copy failed:', error)
-      // Last resort: select the text in the code element
-      const codeElement = document.getElementById('wget-command')
-      if (codeElement) {
-        const range = document.createRange()
-        range.selectNodeContents(codeElement)
-        const selection = window.getSelection()
-        if (selection) {
-          selection.removeAllRanges()
-          selection.addRange(range)
+      console.error('All copy methods failed:', error)
+      
+      // Method 3: Last resort - select the text in the visible code element
+      try {
+        const codeElement = document.getElementById('wget-command')
+        if (codeElement) {
+          // Create a temporary selection
+          const range = document.createRange()
+          range.selectNodeContents(codeElement)
+          const selection = window.getSelection()
+          if (selection) {
+            selection.removeAllRanges()
+            selection.addRange(range)
+          }
+          
+          // Try one more time with the selected text
+          const selectedText = selection.toString()
+          if (selectedText) {
+            try {
+              await navigator.clipboard.writeText(selectedText)
+              setCopied(true)
+              toast({
+                title: "Copied!",
+                description: "Wget command copied to clipboard",
+              })
+              setTimeout(() => setCopied(false), 2000)
+              return
+            } catch {
+              // Continue to manual copy message
+            }
+          }
+          
+          toast({
+            title: "Text selected",
+            description: "Text is selected - press Ctrl+C (or Cmd+C on Mac) to copy",
+          })
+        } else {
+          throw new Error('Code element not found')
         }
-        toast({
-          title: "Text selected",
-          description: "Please copy manually (Ctrl+C / Cmd+C)",
-        })
-      } else {
+      } catch (selectError) {
+        console.error('Selection fallback failed:', selectError)
         toast({
           title: "Copy failed",
-          description: "Please copy the command manually from above",
+          description: `Please manually copy: ${textToCopy.substring(0, 50)}...`,
           variant: "destructive",
         })
       }
@@ -215,11 +276,12 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
       addTag()
     }
+    // Allow paste and other standard operations
   }
 
   if (!model) return null
@@ -280,7 +342,7 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
                 placeholder="Add tag (e.g., vae, diffusion, checkpoint)"
                 value={newTag}
                 onChange={(e) => setNewTag(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyDown}
                 disabled={loading}
                 className="flex-1"
               />
@@ -304,10 +366,15 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
                 {wgetCommand}
               </code>
               <Button
-                onClick={copyToClipboard}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  copyToClipboard()
+                }}
                 variant="outline"
                 size="icon"
                 className="shrink-0"
+                type="button"
               >
                 {copied ? (
                   <Check className="h-4 w-4 text-green-600" />
