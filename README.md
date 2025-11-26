@@ -79,6 +79,21 @@ Copy the wget command and run it on any machine that can access your Raspberry P
 wget http://<raspberry-pi-ip>:8900/api/files/model-name.safetensors
 ```
 
+**Note**: If you get a "Permission denied" error when downloading, ensure you have write permissions to the current directory:
+
+```bash
+# Check current directory permissions
+ls -ld .
+
+# Fix permissions if needed (replace with your username)
+sudo chown -R $USER:$USER ~/comfy/ComfyUI/models/vae
+chmod 755 ~/comfy/ComfyUI/models/vae
+
+# Or download to a directory you own
+wget -O /tmp/model-name.safetensors http://<raspberry-pi-ip>:8900/api/files/model-name.safetensors
+sudo mv /tmp/model-name.safetensors ~/comfy/ComfyUI/models/vae/
+```
+
 ## Docker Commands
 
 ### Start the application:

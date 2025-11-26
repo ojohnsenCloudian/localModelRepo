@@ -1,6 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Copy, Check } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { useToast } from '@/hooks/use-toast'
 
 interface ModelDialogProps {
   model: {
@@ -15,6 +25,7 @@ interface ModelDialogProps {
 export default function ModelDialog({ model, onClose, serverUrl }: ModelDialogProps) {
   const [wgetCommand, setWgetCommand] = useState('')
   const [copied, setCopied] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     if (model) {
@@ -23,10 +34,22 @@ export default function ModelDialog({ model, onClose, serverUrl }: ModelDialogPr
     }
   }, [model, serverUrl])
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(wgetCommand)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(wgetCommand)
+      setCopied(true)
+      toast({
+        title: "Copied!",
+        description: "Wget command copied to clipboard",
+      })
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      toast({
+        title: "Failed to copy",
+        description: "Please copy the command manually",
+        variant: "destructive",
+      })
+    }
   }
 
   if (!model) return null
@@ -40,53 +63,53 @@ export default function ModelDialog({ model, onClose, serverUrl }: ModelDialogPr
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Model Details</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <Dialog open={!!model} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Model Details</DialogTitle>
+          <DialogDescription>
+            View model information and download command
+          </DialogDescription>
+        </DialogHeader>
         
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filename</label>
-            <p className="text-gray-900 dark:text-white break-all">{model.filename}</p>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Filename</label>
+            <p className="text-sm font-mono break-all bg-muted p-2 rounded-md">{model.filename}</p>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Size</label>
-            <p className="text-gray-900 dark:text-white">{formatSize(model.size)}</p>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Size</label>
+            <p className="text-sm">{formatSize(model.size)}</p>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Downloaded At</label>
-            <p className="text-gray-900 dark:text-white">{new Date(model.downloadedAt).toLocaleString()}</p>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Downloaded At</label>
+            <p className="text-sm">{new Date(model.downloadedAt).toLocaleString()}</p>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Wget Command</label>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">Wget Command</label>
             <div className="flex gap-2">
-              <code className="flex-1 bg-gray-100 dark:bg-gray-700 p-3 rounded text-sm text-gray-900 dark:text-white break-all">
+              <code className="flex-1 bg-muted p-3 rounded-md text-sm font-mono break-all overflow-x-auto">
                 {wgetCommand}
               </code>
-              <button
+              <Button
                 onClick={copyToClipboard}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
               >
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
+                {copied ? (
+                  <Check className="h-4 w-4 text-green-600" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
-

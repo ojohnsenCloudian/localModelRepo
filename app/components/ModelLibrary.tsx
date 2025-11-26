@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Search, Loader2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import ModelDialog from './ModelDialog'
 
 interface Model {
@@ -64,7 +67,7 @@ export default function ModelLibrary({ serverUrl }: ModelLibraryProps) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="text-gray-600 dark:text-gray-400">Loading models...</div>
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -72,38 +75,43 @@ export default function ModelLibrary({ serverUrl }: ModelLibraryProps) {
   return (
     <div className="space-y-4">
       <div className="flex gap-4 items-center">
-        <input
-          type="text"
-          placeholder="Search models..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <div className="text-sm text-gray-600 dark:text-gray-400">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search models..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="text-sm text-muted-foreground whitespace-nowrap">
           {filteredModels.length} {filteredModels.length === 1 ? 'model' : 'models'}
         </div>
       </div>
 
       {filteredModels.length === 0 ? (
-        <div className="text-center py-12 text-gray-600 dark:text-gray-400">
+        <div className="text-center py-12 text-muted-foreground">
           {searchQuery ? 'No models found matching your search.' : 'No models downloaded yet.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredModels.map((model) => (
-            <div
+            <Card
               key={model.filename}
               onClick={() => setSelectedModel(model)}
-              className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer border border-gray-200 dark:border-gray-700"
+              className="cursor-pointer hover:shadow-lg transition-shadow"
             >
-              <h3 className="font-semibold text-gray-900 dark:text-white truncate mb-2">
-                {model.filename}
-              </h3>
-              <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                <p>Size: {formatSize(model.size)}</p>
-                <p>Downloaded: {new Date(model.downloadedAt).toLocaleDateString()}</p>
-              </div>
-            </div>
+              <CardHeader>
+                <CardTitle className="truncate text-base">{model.filename}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>Size: {formatSize(model.size)}</p>
+                  <p>Downloaded: {new Date(model.downloadedAt).toLocaleDateString()}</p>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
@@ -118,4 +126,3 @@ export default function ModelLibrary({ serverUrl }: ModelLibraryProps) {
     </div>
   )
 }
-
