@@ -13,7 +13,7 @@ A Next.js application that allows you to download Hugging Face models via URL an
 ## Prerequisites
 
 - Docker and Docker Compose installed on your Raspberry Pi 5
-- `/localModelRepo/` directory created on your Raspberry Pi (or adjust path in docker-compose.yml)
+- `/localModelRepo/data/models/` directory created on your Raspberry Pi (or adjust path in docker-compose.yml)
 
 ## Quick Start
 
@@ -25,8 +25,8 @@ A Next.js application that allows you to download Hugging Face models via URL an
 
 2. Create the models directory on your Raspberry Pi:
    ```bash
-   sudo mkdir -p /localModelRepo
-   sudo chmod 777 /localModelRepo
+   sudo mkdir -p /localModelRepo/data/models
+   sudo chmod -R 777 /localModelRepo/data/models
    ```
 
 3. Build and start the Docker container:
@@ -68,7 +68,7 @@ The application runs on port 8900 by default. To change it:
 
 ### Models Directory
 
-Models are stored in `/localModelRepo/` on your Raspberry Pi by default. To change this:
+Models are stored in `/localModelRepo/data/models/` on your Raspberry Pi by default. To change this:
 
 1. Update the volume mount in `docker-compose.yml`:
    ```yaml
@@ -93,7 +93,7 @@ Models are stored in `/localModelRepo/` on your Raspberry Pi by default. To chan
 If you encounter permission issues with the models directory:
 
 ```bash
-sudo chmod -R 777 /localModelRepo
+sudo chmod -R 777 /localModelRepo/data/models
 ```
 
 ### Container Won't Start
