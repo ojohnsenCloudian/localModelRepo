@@ -136,9 +136,9 @@ export async function POST(request: NextRequest) {
         }
 
         // Wait for write stream to finish
-        await new Promise((resolve, reject) => {
-          writeStream.on('finish', resolve)
-          writeStream.on('error', reject)
+        await new Promise<void>((resolve, reject) => {
+          writeStream.on('finish', () => resolve())
+          writeStream.on('error', (error) => reject(error))
         })
 
         // Get file stats
