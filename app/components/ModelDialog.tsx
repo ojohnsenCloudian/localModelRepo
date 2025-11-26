@@ -35,11 +35,15 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
   const { toast } = useToast()
 
   useEffect(() => {
-    if (model) {
+    if (model && serverUrl) {
       const downloadUrl = `${serverUrl}/api/files/${encodeURIComponent(model.filename)}`
-      setWgetCommand(`wget ${downloadUrl}`)
+      const command = `wget ${downloadUrl}`
+      setWgetCommand(command)
+      console.log('Set wget command:', command)
       setTags(model.tags || [])
       setNewTag('')
+    } else if (!model) {
+      setWgetCommand('')
     }
   }, [model, serverUrl])
 
@@ -62,10 +66,16 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
     }
   }, [model, serverUrl])
 
-  const copyToClipboard = async () => {
-    const textToCopy = wgetCommand || ''
+  const copyToClipboard = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // Get the text directly from the code element as fallback
+    const codeElement = document.getElementById('wget-command')
+    const textToCopy = wgetCommand || (codeElement?.textContent || '').trim()
     
     if (!textToCopy) {
+      console.error('No wget command to copy:', { wgetCommand, model, codeElement })
       toast({
         title: "Nothing to copy",
         description: "Wget command is not available",
@@ -74,11 +84,14 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
       return
     }
 
+    console.log('Attempting to copy:', textToCopy)
+
     try {
       // Method 1: Try modern clipboard API (works in secure contexts like HTTPS)
       if (navigator.clipboard && navigator.clipboard.writeText) {
         try {
           await navigator.clipboard.writeText(textToCopy)
+          console.log('Successfully copied via Clipboard API')
           setCopied(true)
           toast({
             title: "Copied!",
@@ -368,11 +381,7 @@ export default function ModelDialog({ model, onClose, serverUrl, onTagsUpdated }
                 {wgetCommand}
               </code>
               <Button
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  copyToClipboard()
-                }}
+                onClick={copyToClipboard}
                 variant="outline"
                 size="icon"
                 className="shrink-0"
