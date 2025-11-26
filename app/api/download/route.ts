@@ -100,10 +100,16 @@ async function downloadChunk(
         throw new Error('No response body')
       }
 
-      // Open file in append mode (chunks are written sequentially)
-      const writeStream = createWriteStream(filePath, { flags: 'a' })
+      // Open file in append mode with smaller buffer to reduce memory cache
+      // Smaller highWaterMark = less buffering in memory
+      const writeStream = createWriteStream(filePath, { 
+        flags: 'a',
+        highWaterMark: 64 * 1024 // 64KB buffer (default is usually 16KB, but we want smaller)
+      })
       const reader = response.body.getReader()
       let chunkBytesDownloaded = 0
+      let lastSync = 0
+      const SYNC_INTERVAL = 50 * 1024 * 1024 // Sync every 50MB to flush buffers
 
       // Helper function to write chunk with backpressure handling
       const writeChunk = (chunk: Uint8Array): Promise<void> => {
@@ -153,6 +159,23 @@ async function downloadChunk(
         await writeChunk(value)
         chunkBytesDownloaded += value.length
 
+        // Periodic sync to flush buffers to disk (every 50MB)
+        // This helps prevent excessive buff/cache buildup
+        if (chunkBytesDownloaded - lastSync >= SYNC_INTERVAL) {
+          // Force flush the write stream buffers
+          writeStream.uncork()
+          // Open file handle to sync and flush OS buffers
+          try {
+            const fileHandle = await fs.open(filePath, 'r+')
+            await fileHandle.sync() // Force sync to disk - clears OS buffers
+            await fileHandle.close()
+          } catch (syncError) {
+            // Ignore sync errors, continue downloading
+            console.warn(`Sync warning at ${chunkBytesDownloaded} bytes:`, syncError)
+          }
+          lastSync = chunkBytesDownloaded
+        }
+
         // Send progress update every 10MB within the chunk
         if (chunkBytesDownloaded - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
           const totalDownloaded = startByte + chunkBytesDownloaded
@@ -173,10 +196,22 @@ async function downloadChunk(
         }
       }
 
-      // Close write stream
+      // Close write stream and force final sync to disk
       writeStream.end()
       await new Promise<void>((resolve, reject) => {
-        writeStream.on('finish', resolve)
+        writeStream.on('finish', async () => {
+          // Force final sync to ensure all data is written to disk
+          // This helps clear buffers and prevents cache buildup
+          try {
+            const fileHandle = await fs.open(filePath, 'r+')
+            await fileHandle.sync() // Force OS to write all buffers to disk
+            await fileHandle.close()
+          } catch (syncError) {
+            // Ignore sync errors, but log them
+            console.warn(`Failed to sync file after chunk ${chunkNumber}:`, syncError)
+          }
+          resolve()
+        })
         writeStream.on('error', reject)
       })
 
@@ -241,21 +276,25 @@ async function downloadFileInChunks(
       total: totalSize,
     })
 
-    await downloadChunk(
-      url,
-      startByte,
-      endByte,
-      filePath,
-      controller,
-      filename,
-      chunkNumber + 1,
-      totalChunks,
-      totalSize
-    )
+          await downloadChunk(
+            url,
+            startByte,
+            endByte,
+            filePath,
+            controller,
+            filename,
+            chunkNumber + 1,
+            totalChunks,
+            totalSize
+          )
 
-    downloadedBytes += chunkSize
+          downloadedBytes += chunkSize
 
-    // Send progress update after each chunk
+          // Small delay between chunks to let OS flush buffers
+          // This prevents excessive cache buildup and keeps server healthy
+          await sleep(200) // 200ms delay
+
+          // Send progress update after each chunk
     sendSSE(controller, {
       status: 'downloading',
       filename,
@@ -398,6 +437,10 @@ export async function POST(request: NextRequest) {
           )
 
           downloadedBytes += chunkSize
+
+          // Small delay between chunks to let OS flush buffers
+          // This prevents excessive cache buildup
+          await sleep(200) // 200ms delay
 
           // Send progress update after each chunk
           sendSSE(controller, {
