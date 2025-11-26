@@ -29,7 +29,7 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 
 # Update npm to latest version and update system packages
-RUN apk update && apk upgrade && npm install -g npm@latest
+RUN apk update && apk upgrade && npm install -g npm@latest && apk add --no-cache su-exec
 
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
@@ -47,12 +47,17 @@ COPY --from=builder /app/.next/static ./.next/static
 # Note: Volume mount will override this, but ensures directory structure exists
 RUN mkdir -p /app/models && chown -R nextjs:nodejs /app/models && chmod 755 /app/models
 
-USER nextjs
+# Copy entrypoint script (keep as root for permission fixing)
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Don't switch user here - entrypoint will handle it after fixing permissions
 
 EXPOSE 8900
 
 ENV PORT 8900
 ENV HOSTNAME "0.0.0.0"
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "server.js"]
 

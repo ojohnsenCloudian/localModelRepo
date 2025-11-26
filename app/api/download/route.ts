@@ -3,7 +3,8 @@ import fs from 'fs/promises'
 import path from 'path'
 import { createWriteStream } from 'fs'
 
-const MODELS_DIR = path.join(process.cwd(), 'models')
+// Use absolute path to match Docker volume mount
+const MODELS_DIR = '/app/models'
 
 // Ensure models directory exists
 async function ensureModelsDir() {
