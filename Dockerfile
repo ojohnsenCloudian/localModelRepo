@@ -43,8 +43,9 @@ RUN mkdir -p ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Create models directory
-RUN mkdir -p /app/models && chown -R nextjs:nodejs /app/models
+# Create models directory with proper permissions before switching user
+# Note: Volume mount will override this, but ensures directory structure exists
+RUN mkdir -p /app/models && chown -R nextjs:nodejs /app/models && chmod 755 /app/models
 
 USER nextjs
 

@@ -9,8 +9,21 @@ const MODELS_DIR = path.join(process.cwd(), 'models')
 async function ensureModelsDir() {
   try {
     await fs.access(MODELS_DIR)
+    console.log(`Models directory exists: ${MODELS_DIR}`)
   } catch {
     await fs.mkdir(MODELS_DIR, { recursive: true })
+    console.log(`Created models directory: ${MODELS_DIR}`)
+  }
+  
+  // Verify we can write to the directory
+  try {
+    const testFile = path.join(MODELS_DIR, '.test-write')
+    await fs.writeFile(testFile, 'test')
+    await fs.unlink(testFile)
+    console.log(`Models directory is writable: ${MODELS_DIR}`)
+  } catch (error) {
+    console.error(`Cannot write to models directory: ${MODELS_DIR}`, error)
+    throw new Error(`Cannot write to models directory: ${error}`)
   }
 }
 
@@ -53,6 +66,7 @@ export async function POST(request: NextRequest) {
         }
 
         const filePath = path.join(MODELS_DIR, filename)
+        console.log(`Downloading to: ${filePath}`)
 
         // Check if file already exists
         try {
@@ -137,12 +151,19 @@ export async function POST(request: NextRequest) {
 
         // Wait for write stream to finish
         await new Promise<void>((resolve, reject) => {
-          writeStream.on('finish', () => resolve())
-          writeStream.on('error', (error) => reject(error))
+          writeStream.on('finish', () => {
+            console.log(`File write completed: ${filePath}`)
+            resolve()
+          })
+          writeStream.on('error', (error) => {
+            console.error(`File write error for ${filePath}:`, error)
+            reject(error)
+          })
         })
 
         // Get file stats
         const stats = await fs.stat(filePath)
+        console.log(`File saved successfully: ${filePath}, size: ${stats.size} bytes`)
 
         // Send completion message
         sendSSE(controller, {

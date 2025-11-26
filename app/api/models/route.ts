@@ -6,15 +6,19 @@ const MODELS_DIR = path.join(process.cwd(), 'models')
 
 export async function GET() {
   try {
+    console.log(`Checking models directory: ${MODELS_DIR}`)
     // Check if models directory exists
     try {
       await fs.access(MODELS_DIR)
-    } catch {
+      console.log(`Models directory exists: ${MODELS_DIR}`)
+    } catch (error) {
+      console.log(`Models directory does not exist: ${MODELS_DIR}`, error)
       return NextResponse.json({ models: [] })
     }
 
     // Read all files in models directory
     const files = await fs.readdir(MODELS_DIR)
+    console.log(`Found ${files.length} files in models directory:`, files)
     
     const models = await Promise.all(
       files.map(async (filename) => {
