@@ -123,9 +123,17 @@ export async function POST(request: NextRequest) {
         // Helper function to write chunk with backpressure handling
         const writeChunk = (chunk: Uint8Array): Promise<void> => {
           return new Promise((resolve, reject) => {
-            // Set up error handler first
-            const errorHandler = (error: Error) => {
-              writeStream.removeListener('drain', drainHandler)
+            let drainHandler: (() => void) | null = null
+            let errorHandler: ((error: Error) => void) | null = null
+            
+            // Set up error handler
+            errorHandler = (error: Error) => {
+              if (drainHandler) {
+                writeStream.removeListener('drain', drainHandler)
+              }
+              if (errorHandler) {
+                writeStream.removeListener('error', errorHandler)
+              }
               reject(error)
             }
             writeStream.once('error', errorHandler)
@@ -135,12 +143,16 @@ export async function POST(request: NextRequest) {
             
             if (canContinue) {
               // Buffer has space, resolve immediately
-              writeStream.removeListener('error', errorHandler)
+              if (errorHandler) {
+                writeStream.removeListener('error', errorHandler)
+              }
               resolve()
             } else {
               // Buffer is full, wait for drain event
-              const drainHandler = () => {
-                writeStream.removeListener('error', errorHandler)
+              drainHandler = () => {
+                if (errorHandler) {
+                  writeStream.removeListener('error', errorHandler)
+                }
                 resolve()
               }
               writeStream.once('drain', drainHandler)
