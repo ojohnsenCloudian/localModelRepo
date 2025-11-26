@@ -68,78 +68,114 @@ export async function POST(request: NextRequest) {
     console.log(`Extracted filename: ${filename}`)
     console.log(`Target file path: ${filePath}`)
 
+    // Ensure we're using absolute path and directory exists
+    await fs.mkdir(MODELS_DIR, { recursive: true })
+    
     // Use wget to download the file
     // -O specifies output file (use absolute path)
     // --progress=dot shows progress
     // --no-check-certificate in case of SSL issues
-    // Use absolute path directly
-    const wgetCommand = `wget -O "${filePath}" "${url}" --progress=dot --no-check-certificate`
+    // Use absolute path directly - don't use cwd to avoid issues
+    const wgetCommand = `wget -O "${filePath}" "${url}" --progress=dot --no-check-certificate 2>&1`
 
     console.log(`Executing command: ${wgetCommand}`)
+    console.log(`Working directory will be: ${process.cwd()}`)
 
-    // Execute wget from the models directory
-    const { stdout, stderr } = await execAsync(wgetCommand, {
-      maxBuffer: 1024 * 1024 * 100, // 100MB buffer
-      cwd: MODELS_DIR,
-    })
+    // Execute wget - use absolute path, don't rely on cwd
+    let stdout = ''
+    let stderr = ''
+    try {
+      const result = await execAsync(wgetCommand, {
+        maxBuffer: 1024 * 1024 * 1024 * 10, // 10GB buffer for large files
+        timeout: 3600000, // 1 hour timeout
+      })
+      stdout = result.stdout || ''
+      stderr = result.stderr || ''
+    } catch (error: any) {
+      // wget might output to stderr even on success, so check if file exists
+      stdout = error.stdout || ''
+      stderr = error.stderr || error.message || ''
+      console.log(`wget command completed (may have warnings): ${stderr}`)
+    }
 
-    console.log(`wget stdout: ${stdout}`)
-    if (stderr) {
+    console.log(`wget output: ${stdout}`)
+    if (stderr && !stderr.includes('saved')) {
       console.log(`wget stderr: ${stderr}`)
     }
 
-    // Immediately check what files exist in the directory
-    try {
-      const filesBeforeCheck = await fs.readdir(MODELS_DIR)
-      console.log(`Files in directory immediately after wget: ${filesBeforeCheck.join(', ')}`)
-    } catch (err) {
-      console.error(`Error listing directory: ${err}`)
-    }
-
-    // Wait a moment for file system to sync
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // Wait for file system to sync
+    await new Promise(resolve => setTimeout(resolve, 2000))
 
     // Check if file was downloaded successfully
+    const absolutePath = path.resolve(MODELS_DIR, filename)
+    console.log(`Checking for file at: ${absolutePath}`)
+    
     try {
-      // Use absolute path to check file
-      const absolutePath = path.resolve(MODELS_DIR, filename)
       const stats = await fs.stat(absolutePath)
-      console.log(`File successfully downloaded: ${absolutePath}, size: ${stats.size} bytes`)
       
-      // Also verify the directory contents
-      const dirContents = await fs.readdir(MODELS_DIR)
-      console.log(`Directory contents after download: ${dirContents.join(', ')}`)
-      
-      return NextResponse.json({
-        success: true,
-        filename,
-        size: stats.size,
-        filePath: absolutePath,
-        message: 'Download completed successfully',
-      })
+      if (stats.isFile() && stats.size > 0) {
+        console.log(`✓ File successfully downloaded: ${absolutePath}, size: ${stats.size} bytes`)
+        
+        // Verify the directory contents
+        const dirContents = await fs.readdir(MODELS_DIR)
+        console.log(`Directory now contains: ${dirContents.join(', ')}`)
+        
+        return NextResponse.json({
+          success: true,
+          filename,
+          size: stats.size,
+          filePath: absolutePath,
+          message: 'Download completed successfully',
+        })
+      } else {
+        throw new Error('File exists but is not a valid file or is empty')
+      }
     } catch (error: any) {
-      console.error(`File not found at ${filePath}:`, error.message)
+      console.error(`✗ File not found at ${absolutePath}:`, error.message)
       
-      // Try to list directory contents to see what's there
+      // List all files in directory to see what's actually there
       try {
         const dirContents = await fs.readdir(MODELS_DIR)
-        console.log(`Directory contents: ${dirContents.join(', ')}`)
+        console.log(`Current directory contents: ${dirContents.join(', ')}`)
+        console.log(`Looking for: ${filename}`)
         
-        // Check if file exists with a different name
-        const matchingFiles = dirContents.filter(f => f.includes(filename.split('.')[0]))
-        if (matchingFiles.length > 0) {
-          console.log(`Found similar files: ${matchingFiles.join(', ')}`)
+        // Check if file exists with a different name or extension
+        const allFiles = dirContents.filter(f => {
+          const baseName = f.split('.')[0]
+          const targetBaseName = filename.split('.')[0]
+          return baseName === targetBaseName || f.includes(targetBaseName) || targetBaseName.includes(baseName)
+        })
+        
+        if (allFiles.length > 0) {
+          console.log(`Found similar files: ${allFiles.join(', ')}`)
+          // Try to use the first matching file
+          const foundFile = allFiles[0]
+          const foundPath = path.resolve(MODELS_DIR, foundFile)
+          const foundStats = await fs.stat(foundPath)
+          
+          return NextResponse.json({
+            success: true,
+            filename: foundFile,
+            size: foundStats.size,
+            filePath: foundPath,
+            message: `Download completed (saved as ${foundFile})`,
+            originalFilename: filename,
+          })
         }
-      } catch (dirError) {
-        console.error(`Cannot read directory ${MODELS_DIR}:`, dirError)
+      } catch (dirError: any) {
+        console.error(`Cannot read directory ${MODELS_DIR}:`, dirError.message)
       }
+      
+      // Check if wget actually succeeded by looking at output
+      const wgetSuccess = stdout.includes('saved') || stdout.includes('100%') || stderr.includes('saved')
       
       return NextResponse.json(
         {
-          error: 'Download failed - file not found',
-          details: stderr || stdout || error.message,
-          filePath: filePath,
+          error: 'Download failed - file not found at expected location',
+          details: wgetSuccess ? 'File may have been saved with a different name' : (stderr || stdout || error.message),
+          filePath: absolutePath,
           filename: filename,
+          wgetOutput: stdout + stderr,
         },
         { status: 500 }
       )

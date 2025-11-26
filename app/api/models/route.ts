@@ -6,32 +6,50 @@ const MODELS_DIR = process.env.MODELS_DIR || '/app/models'
 
 export async function GET() {
   try {
-    console.log(`Listing models from MODELS_DIR: ${MODELS_DIR}`)
-    console.log(`MODELS_DIR env var: ${process.env.MODELS_DIR}`)
+    console.log(`[MODELS API] Listing models from MODELS_DIR: ${MODELS_DIR}`)
+    console.log(`[MODELS API] MODELS_DIR env var: ${process.env.MODELS_DIR}`)
     
-    // Check if models directory exists
+    // Ensure directory exists
     try {
-      await fs.access(MODELS_DIR)
-      console.log(`Directory ${MODELS_DIR} exists`)
+      await fs.mkdir(MODELS_DIR, { recursive: true })
+    } catch (error: any) {
+      console.error(`[MODELS API] Error creating directory:`, error.message)
+    }
+    
+    // Check if models directory exists and is accessible
+    try {
+      const dirStats = await fs.stat(MODELS_DIR)
+      if (!dirStats.isDirectory()) {
+        console.error(`[MODELS API] ${MODELS_DIR} is not a directory`)
+        return NextResponse.json([])
+      }
+      console.log(`[MODELS API] Directory ${MODELS_DIR} exists and is accessible`)
     } catch (error: any) {
       // Directory doesn't exist, return empty array
-      console.error(`Directory ${MODELS_DIR} does not exist:`, error.message)
+      console.error(`[MODELS API] Directory ${MODELS_DIR} does not exist or is not accessible:`, error.message)
       return NextResponse.json([])
     }
 
     // Read directory contents
-    const files = await fs.readdir(MODELS_DIR)
-    console.log(`Found ${files.length} items in directory: ${files.join(', ')}`)
+    let files: string[] = []
+    try {
+      files = await fs.readdir(MODELS_DIR)
+      console.log(`[MODELS API] Found ${files.length} items in directory: ${files.join(', ')}`)
+    } catch (error: any) {
+      console.error(`[MODELS API] Error reading directory:`, error.message)
+      return NextResponse.json([])
+    }
 
     // Get file stats for each file
     const models = await Promise.all(
       files.map(async (filename) => {
         try {
-          const filePath = path.join(MODELS_DIR, filename)
+          const filePath = path.resolve(MODELS_DIR, filename)
           const stats = await fs.stat(filePath)
 
           // Only return files, not directories
-          if (stats.isFile()) {
+          if (stats.isFile() && stats.size > 0) {
+            console.log(`[MODELS API] Found file: ${filename}, size: ${stats.size} bytes`)
             return {
               filename,
               size: stats.size,
@@ -39,10 +57,12 @@ export async function GET() {
               modified: stats.mtime.toISOString(),
               downloadUrl: `/api/models/${encodeURIComponent(filename)}`,
             }
+          } else {
+            console.log(`[MODELS API] Skipping ${filename} (not a file or empty)`)
           }
           return null
-        } catch (error) {
-          console.error(`Error reading file ${filename}:`, error)
+        } catch (error: any) {
+          console.error(`[MODELS API] Error reading file ${filename}:`, error.message)
           return null
         }
       })
@@ -57,6 +77,7 @@ export async function GET() {
         return dateB - dateA
       })
 
+    console.log(`[MODELS API] Returning ${validModels.length} valid models`)
     return NextResponse.json(validModels)
   } catch (error: any) {
     console.error('Error listing models:', error)
