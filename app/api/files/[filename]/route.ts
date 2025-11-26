@@ -6,10 +6,11 @@ const MODELS_DIR = path.join(process.cwd(), 'models')
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    const filename = decodeURIComponent(params.filename)
+    const { filename: filenameParam } = await params
+    const filename = decodeURIComponent(filenameParam)
     
     // Security: prevent directory traversal
     if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
