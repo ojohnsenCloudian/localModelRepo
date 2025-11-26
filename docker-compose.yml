@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  model-repo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8900:8900"
+    volumes:
+      - ./models:/app/models
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    platform: linux/arm64
+
