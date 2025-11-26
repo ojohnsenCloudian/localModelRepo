@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast'
 interface DownloadProgress {
   id: string
   url: string
-  status: 'queued' | 'starting' | 'downloading' | 'completed' | 'error'
+  status: 'queued' | 'starting' | 'resuming' | 'retrying' | 'downloading' | 'completed' | 'error'
   filename?: string
   progress: number
   loaded: number
@@ -107,9 +107,17 @@ export default function Home() {
               setDownloads(prev => {
                 const newMap = new Map(prev)
                 const existing = newMap.get(downloadId) || { id: downloadId, url, status: 'starting', progress: 0, loaded: 0, total: 0 }
+                const statusMap: Record<string, DownloadProgress['status']> = {
+                  'completed': 'completed',
+                  'downloading': 'downloading',
+                  'starting': 'starting',
+                  'resuming': 'resuming',
+                  'retrying': 'retrying',
+                  'queued': 'queued',
+                }
                 newMap.set(downloadId, {
                   ...existing,
-                  status: data.status === 'completed' ? 'completed' : data.status === 'downloading' ? 'downloading' : 'starting',
+                  status: statusMap[data.status] || 'downloading',
                   filename: data.filename || existing.filename,
                   progress: data.progress || 0,
                   loaded: data.loaded || 0,
@@ -300,6 +308,8 @@ export default function Home() {
                             <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
                           ) : download.status === 'error' ? (
                             <X className="h-4 w-4 text-destructive shrink-0" />
+                          ) : download.status === 'resuming' || download.status === 'retrying' ? (
+                            <Download className="h-4 w-4 text-yellow-600 animate-pulse shrink-0" />
                           ) : (
                             <Download className="h-4 w-4 text-primary animate-bounce shrink-0" />
                           )}
@@ -308,6 +318,15 @@ export default function Home() {
                           </span>
                           {download.status === 'queued' && (
                             <span className="text-xs text-muted-foreground">(Queued)</span>
+                          )}
+                          {download.status === 'resuming' && (
+                            <span className="text-xs text-yellow-600">(Resuming)</span>
+                          )}
+                          {download.status === 'retrying' && (
+                            <span className="text-xs text-yellow-600">(Retrying)</span>
+                          )}
+                          {download.message && (
+                            <span className="text-xs text-muted-foreground">- {download.message}</span>
                           )}
                         </div>
                         {download.error && (
