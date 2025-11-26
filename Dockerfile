@@ -10,7 +10,7 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (including dev dependencies for build)
+# Install dependencies
 RUN npm install
 
 # Copy application files
@@ -31,7 +31,7 @@ ENV PORT=8900
 ENV HOST=0.0.0.0
 ENV MODELS_DIR=/app/models
 
-# Create models directory with proper permissions
+# Create models directory (will be overridden by volume mount)
 RUN mkdir -p /app/models && chmod 777 /app/models
 
 # Start the application

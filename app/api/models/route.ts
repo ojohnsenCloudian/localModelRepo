@@ -4,29 +4,31 @@ import * as path from 'path'
 
 const MODELS_DIR = process.env.MODELS_DIR || '/app/models'
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
+}
+
 export async function GET() {
   try {
-    console.log(`[MODELS API] Listing models from MODELS_DIR: ${MODELS_DIR}`)
-    console.log(`[MODELS API] MODELS_DIR env var: ${process.env.MODELS_DIR}`)
-    
     // Ensure directory exists
     try {
       await fs.mkdir(MODELS_DIR, { recursive: true })
-    } catch (error: any) {
-      console.error(`[MODELS API] Error creating directory:`, error.message)
+    } catch (error) {
+      // Ignore if already exists
     }
-    
-    // Check if models directory exists and is accessible
+
+    // Check if directory exists and is accessible
     try {
-      const dirStats = await fs.stat(MODELS_DIR)
-      if (!dirStats.isDirectory()) {
-        console.error(`[MODELS API] ${MODELS_DIR} is not a directory`)
+      const stats = await fs.stat(MODELS_DIR)
+      if (!stats.isDirectory()) {
         return NextResponse.json([])
       }
-      console.log(`[MODELS API] Directory ${MODELS_DIR} exists and is accessible`)
     } catch (error: any) {
-      // Directory doesn't exist, return empty array
-      console.error(`[MODELS API] Directory ${MODELS_DIR} does not exist or is not accessible:`, error.message)
+      console.error(`Models directory not accessible: ${error.message}`)
       return NextResponse.json([])
     }
 
@@ -34,22 +36,25 @@ export async function GET() {
     let files: string[] = []
     try {
       files = await fs.readdir(MODELS_DIR)
-      console.log(`[MODELS API] Found ${files.length} items in directory: ${files.join(', ')}`)
     } catch (error: any) {
-      console.error(`[MODELS API] Error reading directory:`, error.message)
+      console.error(`Error reading directory: ${error.message}`)
       return NextResponse.json([])
     }
 
     // Get file stats for each file
     const models = await Promise.all(
       files.map(async (filename) => {
+        // Skip hidden files
+        if (filename.startsWith('.')) {
+          return null
+        }
+
         try {
-          const filePath = path.resolve(MODELS_DIR, filename)
+          const filePath = path.join(MODELS_DIR, filename)
           const stats = await fs.stat(filePath)
 
           // Only return files, not directories
           if (stats.isFile() && stats.size > 0) {
-            console.log(`[MODELS API] Found file: ${filename}, size: ${stats.size} bytes`)
             return {
               filename,
               size: stats.size,
@@ -57,12 +62,10 @@ export async function GET() {
               modified: stats.mtime.toISOString(),
               downloadUrl: `/api/models/${encodeURIComponent(filename)}`,
             }
-          } else {
-            console.log(`[MODELS API] Skipping ${filename} (not a file or empty)`)
           }
           return null
         } catch (error: any) {
-          console.error(`[MODELS API] Error reading file ${filename}:`, error.message)
+          console.error(`Error reading file ${filename}: ${error.message}`)
           return null
         }
       })
@@ -77,7 +80,6 @@ export async function GET() {
         return dateB - dateA
       })
 
-    console.log(`[MODELS API] Returning ${validModels.length} valid models`)
     return NextResponse.json(validModels)
   } catch (error: any) {
     console.error('Error listing models:', error)
@@ -87,12 +89,3 @@ export async function GET() {
     )
   }
 }
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
-}
-

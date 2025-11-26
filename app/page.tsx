@@ -31,7 +31,7 @@ export default function Home() {
     }
   }, [])
 
-  // Load models on mount and after downloads
+  // Load models
   const loadModels = async () => {
     try {
       setIsLoadingModels(true)
@@ -89,7 +89,7 @@ export default function Home() {
 
       const data = await response.json()
 
-      if (response.ok) {
+      if (response.ok && data.success) {
         setDownloadMessage({
           type: 'success',
           text: `Successfully downloaded: ${data.filename} (${formatBytes(data.size)})`,
@@ -314,3 +314,4 @@ export default function Home() {
     </main>
   )
 }
+

@@ -15,5 +15,5 @@ services:
       - MODELS_DIR=/app/models
     restart: unless-stopped
     platform: linux/arm64
-    user: "0:0"  # Run as root to ensure write permissions
+    user: "0:0"
 
